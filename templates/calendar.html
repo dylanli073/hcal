@@ -1,0 +1,42 @@
+{% extends "pages.html" %}
+
+{% block title %}
+	Calendar
+	{{ test }}
+{% endblock %}
+
+{% block filterCheckBoxes %}
+	{% for i in range(allCalendars|length) %}
+		<input type="checkbox" name="filter" value="{{ i }}" {% if i in indices %}checked{% endif %}><span class="checkboxtext">{{ allCalendars[i][0] }}</span><br>
+	{% endfor %}
+{% endblock %}
+
+{% block main %}
+
+	<!--<iframe src="https://calendar.google.com/calendar/b/1/embed?mode=AGENDA&amp;height=600&amp;wkst=1&amp;bgcolor=%23FFFFFF&amp;src=0dylan7li3%40gmail.com&amp;color=%231B887A&amp;src=kg07lkvkct5gu3mgjn2dee6e1g%40group.calendar.google.com&amp;color=%2323164E&amp;ctz=America%2FNew_York" style="border-width:0" width="800" height="600" frameborder="0" scrolling="no"></iframe>-->
+
+	<iframe src="
+				https://calendar.google.com/calendar/b/4/embed
+					?		title			=	 
+					&amp;	showTabs		=	0
+					&amp;	showCalendars	=	0
+				{% if not month and not agenda %}
+					&amp;	mode			=	WEEK
+				{% endif %}
+				{% if agenda %}
+					&amp;	mode			=	AGENDA
+				{% endif %}
+					&amp;	height			=	600
+					&amp;	wkst			=	1
+					&amp;	bgcolor			=	%236666cc
+					&amp;	src				=	0dylan7li3%40gmail.com
+					&amp;	color			=	%231B887A
+				{% for cal in chosenCals %}
+					&amp;	src				=	{{ cal[1] }}
+					&amp;	color			=	%231B887A
+				{% endfor %}
+					&amp;	ctz				=	America%2FNew_York;
+                " 
+                style="border:solid 1px #777" width="800" height="800" frameborder="0" scrolling="no"></iframe>
+{% endblock %}
+
