@@ -226,7 +226,7 @@ def clear_credentials():
 
 
 def main():
-	return redirect("/calendar")
+	return redirect("/")
 
 if __name__ == '__main__':
   
