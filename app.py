@@ -9,10 +9,9 @@ from helpers import *
 # This variable specifies the name of a file that contains the OAuth 2.0
 # information for this application, including its client_id and client_secret.
 CLIENT_SECRETS_FILE = "client_secret.json"
-# CLIENT_SECRETS_FILE_CAL = "client_secret_cal.json"
 
-# This OAuth 2.0 access scope allows for full read/write access to the
-# authenticated user's account and requires requests to use an SSL connection.
+# This OAuth 2.0 access scope (separate for gmail and calendar APIs) allows for full modify/write
+# access to the authenticated user's account and requires requests to use an SSL connection.
 SCOPES_GMAIL = 'https://www.googleapis.com/auth/gmail.modify'
 API_SERVICE_NAME_GMAIL = 'gmail'
 API_VERSION_GMAIL = 'v1'
@@ -31,10 +30,10 @@ app.secret_key = 'II5l9oW0KmbyZgW88vzu'
 
 @app.after_request
 def after_request(response):
-	response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-	response.headers["Expires"] = 0
-	response.headers["Pragma"] = "no-cache"
-	return response
+  response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+  response.headers["Expires"] = 0
+  response.headers["Pragma"] = "no-cache"
+  return response
 
 
 # Configure session to use filesystem (instead of signed cookies)
@@ -46,63 +45,56 @@ Session(app)
 
 @app.route("/", methods=["GET", "POST"])
 def index():
-	if 'credentials' not in flask.session:
-		return redirect('authorize-gmail')
-	else:
-		parseGmail()
-		return redirect("/load-calendar")
+  if 'credentials' not in flask.session:
+    return redirect('authorize-gmail')
+  else:
+    parseGmail()
+    return redirect("/load-calendar")
 
 
 @app.route("/load-calendar")
 def load_calendar():
-	# initial calendar view to week
-	session["currView"] = "week"
-
-	# get all calendars
-	# session["allCalendars"] = [
-	# 							["Name of Calendar", "kg07lkvkct5gu3mgjn2dee6e1g%40group.calendar.google.com", "%2323164E"],
-	# 							["Second Name", "qktm81ela24grhhrdnvlnuinn8%40group.calendar.google.com", "%23182C57"]
-	# 						  ]
-	
-	credentials = google.oauth2.credentials.Credentials(
-	**flask.session['credentials'])
-	cal = googleapiclient.discovery.build(
+  # obtain credentials from flask session to build calendar
+  credentials = google.oauth2.credentials.Credentials(
+  **flask.session['credentials'])
+  cal = googleapiclient.discovery.build(
         API_SERVICE_NAME_CAL, API_VERSION_CAL, credentials=credentials)
-	session["allCalendars"] = listEvents(cal)
+  
+  # initialize allCalendars
+  session["allCalendars"] = listEvents(cal)
 
+  # initialize calendar view to week
+  session["currView"] = "week"
 
+  # initialize chosenCals to all indices in allCalendars
+  session["chosenCals"] = [i for i in range(len(session["allCalendars"]))]
 
-	# initialize chosenCals to all indices in allCalendars
-	session["chosenCals"] = [i for i in range(len(session["allCalendars"]))]
-
-	# redirt user to calendar
-	return redirect("/calendar")
+  # redir user to calendar
+  return redirect("/calendar")
 
 
 @app.route("/calendar", methods=["GET", "POST"])
 def calendar():
-	search = request.args.get("search")
+  # update view and currView
+  view = request.args.get("view")
+  if not view:
+    view = session["currView"]
+  else:
+    session["currView"] = view
+  
+  # get indices of calendars as ints from checkboxes
+  if request.method == 'POST':
+    session["chosenCals"] = [int(i) for i in request.form.getlist('filter')]
+  
+  # make list of calendar names, codes, colors that the user wants to see
+  chosenCals = [session["allCalendars"][i] for i in session["chosenCals"]]
+  for cal in chosenCals:
+    cal[1] = cal[1].replace("#", "%23")
 
-	# default view is week, otherwise currView
-	view = request.args.get("view")
-	if not view:
-		view = session["currView"]
-	else:
-		session["currView"] = view
-	
-	# get indices of calendars from checkboxes
-	if request.method == 'POST':
-		session["chosenCals"] = [int(i) for i in request.form.getlist('filter')]
-	
-	# make list of calendar names, codes, colors that the user wants to see
-	chosenCals = [session["allCalendars"][i] for i in session["chosenCals"]]
-	for cal in chosenCals:
-		cal[1] = cal[1].replace("#", "%23")
-
-	# render calendar page
-	return render_template("calendar.html", allCalendars=session["allCalendars"], month=(True if view == "month" else False), 
-							agenda=(True if view == "agenda" else False), chosenCals=chosenCals, indices=session["chosenCals"])
-	
+  # render calendar page
+  return render_template("calendar.html", allCalendars=session["allCalendars"], month=(True if view == "month" else False), 
+              agenda=(True if view == "agenda" else False), chosenCals=chosenCals, indices=session["chosenCals"])
+  
 
 @app.route('/authorize-gmail')
 def authorize_gmail():
@@ -226,7 +218,7 @@ def clear_credentials():
 
 
 def main():
-	return redirect("/")
+  return redirect("/")
 
 if __name__ == '__main__':
   
@@ -235,5 +227,4 @@ if __name__ == '__main__':
   # for your API project in the Google API Console.
   # app.run('localhost', 5050, debug=True)
   app.run(debug=True)
-
 
