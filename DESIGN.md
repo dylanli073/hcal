@@ -1,6 +1,7 @@
 # Design #
 
-Vincent Li, Anna Lou, Dylan Li  
+Made by: Vincent Li, Anna Lou, Dylan Li  
+  
   
 HCAL is a web application developed using the Flask microframework for Python. It incorporates the Gmail API, Google Calendar API, and parsedatetime library implemented previously by a github user to search through emails and compile event times into a Google Calendar. Additionally, Bootstrap libraries were used to stylize the web application.  
 
