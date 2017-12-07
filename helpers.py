@@ -53,7 +53,7 @@ def parseGmail():
     # If no messages were found, return empty list
     messages = results.get('messages', [])
     if not messages:
-        continue
+        print("Messages not found")
     else:
         # Search through messages for datetimes
         for message in messages:
