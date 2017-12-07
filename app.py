@@ -6,11 +6,6 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from helpers import *
 
 
-# When running locally, disable OAuthlib's HTTPs verification.
-# ACTION ITEM for developers:
-# When running in production *do not* leave this option enabled.
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
-
 # This variable specifies the name of a file that contains the OAuth 2.0
 # information for this application, including its client_id and client_secret.
 CLIENT_SECRETS_FILE = "client_secret.json"
