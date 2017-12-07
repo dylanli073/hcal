@@ -9,7 +9,10 @@ When the user copies the event to their personal calendar, they are able to visu
 
 
 ## Note ##
-At this stage in our project development, we have not gotten the opportunity to experiment with different authentication accounts. So in order to run our program, you must log in via our admin user account (0dylan7li3@gmail.com) and authenticate through Google. Then visit the URL's "/authorize-gmail" and "/authorize-cal" to authorize the Gmail and Google Calendar APIs. Then visit the home page ("/") to get started!  
+At this stage in our project development, we have not gotten the opportunity to experiment with different authentication accounts. So in order to run our program, you must log in via our admin user account (0dylan7li3@gmail.com) and authenticate through Google. Then visit the URL's "/authorize-gmail" and "/authorize-cal" to authorize the Gmail and Google Calendar APIs. Finally visit the home page ("/") to get started!  
   
 ## Note 2 ##
 Our web application deployed on Heroku may experience some occasional internal server errors, which do not occur when running the Flask app locally. We hope to resolve this issue sometime in the near future.
+
+## Note 3 ##
+When running the Flask app locally, enter the command "export OAUTHLIB_INSECURE_TRANSPORT=1" in Terminal on Mac OSX and Linux or "set OAUTHLIB_INSECURE_TRANSPORT=1" in Command Prompt on Windows. This will enable authentication via non-HTTPS routes.
