@@ -2,24 +2,11 @@
 import os
 import flask
 import requests
-
 import google.oauth2.credentials
 import google_auth_oauthlib.flow
 import googleapiclient.discovery
-
-
-import httplib2
-import sys
-
-
 from apiclient import errors
-from oauth2client import client
-from oauth2client import tools
-from oauth2client.file import Storage
-
-
 import base64
-
 from datetime import datetime
 from time import mktime
 import parsedatetime as pdt
@@ -29,8 +16,8 @@ import parsedatetime as pdt
 # information for this application, including its client_id and client_secret.
 CLIENT_SECRETS_FILE = "client_secret.json"
 
-# This OAuth 2.0 access scope allows for full read/write access to the
-# authenticated user's account and requires requests to use an SSL connection.
+# This OAuth 2.0 access scope (separate for Gmail and Calendar APIs) allows for full modify/write
+# access to the authenticated user's account and requires requests to use an SSL connection.
 SCOPES_GMAIL = 'https://www.googleapis.com/auth/gmail.modify'
 API_SERVICE_NAME_GMAIL = 'gmail'
 API_VERSION_GMAIL = 'v1'
@@ -40,46 +27,60 @@ API_SERVICE_NAME_CAL = 'calendar'
 API_VERSION_CAL = 'v3'
 
 
-
+# Parsing algorithm to search for instances of datetime in email message subjects and bodies
+# If a datetime is found, add the event to Google calendar
 def parseGmail():
   # Load credentials from the session.
     credentials = google.oauth2.credentials.Credentials(
         **flask.session['credentials'])
 
+    # Build gmail and calendar instances
     gmail = googleapiclient.discovery.build(
         API_SERVICE_NAME_GMAIL, API_VERSION_GMAIL, credentials=credentials)
     cal = googleapiclient.discovery.build(
         API_SERVICE_NAME_CAL, API_VERSION_CAL, credentials=credentials)
 
 
-  # Save credentials back to session in case access token was refreshed.
-  # ACTION ITEM: In a production app, you likely want to save these
-  #              credentials in a persistent database instead.
+    # Save credentials back to session in case access token was refreshed.
     flask.session['credentials'] = credentials_to_dict(credentials)
 
+    # Create a parsedatetime instance
     pdtCal = pdt.Calendar()
-    results = gmail.users().messages().list(userId='me', q='is:inbox', labelIds=['UNREAD']).execute()
-    messages = results.get('messages', [])
 
+    # Query all unread messages from Gmail inbox
+    results = gmail.users().messages().list(userId='me', q='is:inbox', labelIds=['UNREAD']).execute()
+    
+    # If no messages were found, return empty list
+    messages = results.get('messages', [])
     if not messages:
-        print('No messages found.')
+        continue
     else:
-        print('Messages found')
+        # Search through messages for datetimes
         for message in messages:
+
+            # Mark current message as READ so that it will not have to be checked for a datetime again
             gmail.users().messages().modify(userId='me', id=message['id'],
                                           body={'removeLabelIds': ['UNREAD']}).execute()
+
+            # Obtain body of message in UTF-8 text after a decoding base64 string
             msg_body = GetMimeMessage(gmail, 'me', message['id']).lower()
+
+            # Search for "subject" header of the message
             headers = GetMessage(gmail, 'me', message['id'])['payload']['headers']
             for header in headers:
                 if header["name"].lower() == "subject":
                     subject = header["value"]
                     break
-            # Ensure that message is not a reply
+
+            # Ensure that message is not a reply (since the original email most likely contains the event and was already parsed)
             if "Re:" not in subject:
+
+                # Search subject of email for datetime and convert from a time struct to a datetime object
                 parsedDateSubject = pdtCal.parse(subject)[0]
                 parsedDatetimeSubject = datetime.fromtimestamp(mktime(parsedDateSubject))
 
-                # Inspired by https://stackoverflow.com/questions/18269888/convert-datetime-format-into-seconds
+                # Convert parsed datetime and current datetime to number of seconds since epoch
+                # (inspired by https://stackoverflow.com/questions/18269888/convert-datetime-format-into-seconds
                 parsedDateSubjectInSeconds = int(mktime(parsedDateSubject))
                 nowSubject = int(mktime(datetime.now().timetuple()))
 
@@ -94,21 +95,25 @@ def parseGmail():
                     created_event['summary'] = subject
                     cal.events().update(calendarId='primary', eventId=created_event['id'], body=created_event).execute()
 
-                # If time parsed from email subject is within 60 seconds of current time, parse email body for a different, more accurete event time (if any)
+                # If time parsed from email subject is within 60 seconds of current time, parse email body for a 
+                # different, more accurete event time (if any)
                 else:
+                    # Search email body for datetime and convert from a time struct to a datetime object
                     parsedDateBody = pdtCal.parse(msg_body)[0]
                     parsedDatetimeBody = datetime.fromtimestamp(mktime(parsedDateBody))
-                    print(parsedDateBody)
+
+                    # Search subject of email for datetime and convert from a time struct to a datetime object
                     parsedDateBodyInSeconds = int(mktime(parsedDateBody))
                     nowBody = int(mktime(datetime.now().timetuple()))
 
-                    # If time parsed from email body is more than 60 seconds away from current time, do not add event to calendar
+                    # If time parsed from email body is more than 60 seconds away from current time, add event to calendar
                     if int(abs(parsedDateBodyInSeconds - nowBody)) > 60:
                         created_event = cal.events().quickAdd(calendarId='primary', text=parsedDatetimeBody).execute()
                         created_event['summary'] = subject
                         cal.events().update(calendarId='primary', eventId=created_event['id'], body=created_event).execute()
 
 
+# From Google API documentation
 def credentials_to_dict(credentials):
   return {'token': credentials.token,
           'refresh_token': credentials.refresh_token,
@@ -130,8 +135,12 @@ def GetMimeMessage(service, user_id, msg_id):
   Returns:
     A MIME Message, consisting of data from Message.
   """
+  # Use a series of try and except messages to find body of message and decode it from base64 and encode into UTF-8
   try:
       message = service.users().messages().get(userId=user_id, id=msg_id).execute()
+
+      # Through analysis of sample emails, we determined that the "parts" key may have several similar nested values
+      # that need to be checked for body text
       try:
           msg_part = message['payload']['parts'][0]
           try:
@@ -146,6 +155,7 @@ def GetMimeMessage(service, user_id, msg_id):
               msg_str = ""
 
       return msg_str
+      
   except errors.HttpError as error:
       print('An error occurred: %s' % error)
       return ""
@@ -165,13 +175,14 @@ def GetMessage(service, user_id, msg_id):
     """
     try:
         message = service.users().messages().get(userId=user_id, id=msg_id).execute()
-
-
         return message
     except errors.HttpError as error:
         print('An error occurred: %s' % error)
+        return ""
 
 
+# Returns list of lists of Google Calendar events (name and id)
+# Adapted from Google Calendar API documentation
 def listEvents(service):
     retCalList = []
     page_token = None

@@ -3,6 +3,8 @@ from flask_session import Session
 from tempfile import mkdtemp
 from werkzeug.exceptions import default_exceptions
 from werkzeug.security import check_password_hash, generate_password_hash
+
+# Import functions from helpers.py file
 from helpers import *
 
 
@@ -24,7 +26,6 @@ API_VERSION_CAL = 'v3'
 # Configure application
 app = Flask(__name__)
 
-
 app.secret_key = 'II5l9oW0KmbyZgW88vzu'
 
 
@@ -45,57 +46,63 @@ Session(app)
 
 @app.route("/", methods=["GET", "POST"])
 def index():
+  # If no login creditionals are stored in the Flask session, ask user to authorize account
   if 'credentials' not in flask.session:
     return redirect('authorize-gmail')
+
+  # If user is authorized, then parse Gmail account for events in new messages to add to the calendar
   else:
     parseGmail()
+
+    # Redirect to the load-calendar page after done parsing
     return redirect("/load-calendar")
 
 
 @app.route("/load-calendar")
 def load_calendar():
-  # obtain credentials from flask session to build calendar
+  # Obtain credentials from flask session to build calendar
   credentials = google.oauth2.credentials.Credentials(
   **flask.session['credentials'])
   cal = googleapiclient.discovery.build(
         API_SERVICE_NAME_CAL, API_VERSION_CAL, credentials=credentials)
   
-  # initialize allCalendars
+  # Initialize allCalendars
   session["allCalendars"] = listEvents(cal)
 
-  # initialize calendar view to week
+  # Initialize calendar view to week
   session["currView"] = "week"
 
-  # initialize chosenCals to all indices in allCalendars
+  # Initialize chosenCals to all indices in allCalendars
   session["chosenCals"] = [i for i in range(len(session["allCalendars"]))]
 
-  # redir user to calendar
+  # Redirect user to calendar
   return redirect("/calendar")
 
 
 @app.route("/calendar", methods=["GET", "POST"])
 def calendar():
-  # update view and currView
+  # Update view and currView
   view = request.args.get("view")
   if not view:
     view = session["currView"]
   else:
     session["currView"] = view
   
-  # get indices of calendars as ints from checkboxes
+  # Get indices of calendars as ints from checkboxes
   if request.method == 'POST':
     session["chosenCals"] = [int(i) for i in request.form.getlist('filter')]
   
-  # make list of calendar names, codes, colors that the user wants to see
+  # Make list of calendar names, codes, colors that the user wants to see
   chosenCals = [session["allCalendars"][i] for i in session["chosenCals"]]
   for cal in chosenCals:
     cal[1] = cal[1].replace("#", "%23")
 
-  # render calendar page
+  # Render calendar page
   return render_template("calendar.html", allCalendars=session["allCalendars"], month=(True if view == "month" else False), 
               agenda=(True if view == "agenda" else False), chosenCals=chosenCals, indices=session["chosenCals"])
   
 
+# Authorization function from Gmail API
 @app.route('/authorize-gmail')
 def authorize_gmail():
   # Create flow instance to manage the OAuth 2.0 Authorization Grant Flow steps.
@@ -112,13 +119,12 @@ def authorize_gmail():
       # Enable incremental authorization. Recommended as a best practice.
       include_granted_scopes='true')
 
-
   # Store the state so the callback can verify the auth server response.
   flask.session['state'] = state_gmail
 
   return redirect(authorization_url_gmail)
 
-
+# Authorization callback function from Gmail API
 @app.route('/oauth2callback-gmail')
 def oauth2callback_gmail():
   # Specify the state when creating the flow in the callback so that it can
@@ -142,6 +148,7 @@ def oauth2callback_gmail():
   return redirect(url_for('index'))
 
 
+# Authorization function from Google Calendar API
 @app.route('/authorize-cal')
 def authorize_cal():
   # Create flow instance to manage the OAuth 2.0 Authorization Grant Flow steps.
@@ -150,14 +157,12 @@ def authorize_cal():
 
   flow_cal.redirect_uri = flask.url_for('oauth2callback_cal', _external=True)
 
-
   authorization_url_cal, state_cal = flow_cal.authorization_url(
       # Enable offline access so that you can refresh an access token without
       # re-prompting the user for permission. Recommended for web server apps.
       access_type='offline',
       # Enable incremental authorization. Recommended as a best practice.
       include_granted_scopes='true')
-  
 
   # Store the state so the callback can verify the auth server response.
   flask.session['state'] = state_cal
@@ -165,7 +170,7 @@ def authorize_cal():
   return redirect(authorization_url_cal)
 
 
-
+#Authorization callback function from Google Calendar API
 @app.route('/oauth2callback-cal')
 def oauth2callback_cal():
   # Specify the state when creating the flow in the callback so that it can
@@ -188,7 +193,7 @@ def oauth2callback_cal():
 
   return redirect(url_for('index'))
 
-
+# Revoke creditentials from Flask session (from Google API documentation)
 @app.route('/revoke')
 def revoke():
   if 'credentials' not in flask.session:
@@ -209,6 +214,7 @@ def revoke():
     return('An error occurred.')
 
 
+# Clear creditionals from Flask session (from Google API documentation)
 @app.route('/clear')
 def clear_credentials():
   if 'credentials' in flask.session:
@@ -216,15 +222,10 @@ def clear_credentials():
   return ('Credentials have been cleared.<br><br>')
 
 
-
 def main():
   return redirect("/")
 
-if __name__ == '__main__':
-  
 
-  # Specify a hostname and port that are set as a valid redirect URI
-  # for your API project in the Google API Console.
-  # app.run('localhost', 5050, debug=True)
-  app.run(debug=True)
+if __name__ == '__main__':
+  app.run()
 
