@@ -75,30 +75,24 @@ def parseGmail():
             # Ensure that message is not a reply (since the original email most likely contains the event and was already parsed)
             if "Re:" not in subject:
 
-                # Search subject of email for datetime and convert from a time struct to a datetime object
-                parsedDateSubject = pdtCal.parse(subject)[0]
-                parsedDatetimeSubject = datetime.fromtimestamp(mktime(parsedDateSubject))
+                # Create temporary event to use Google Calendar quickAdd function to parse subject for datetime
+                createdEvent = cal.events().quickAdd(calendarId='primary', text=subject).execute()
 
-                # Convert parsed datetime and current datetime to number of seconds since epoch
-                # (inspired by https://stackoverflow.com/questions/18269888/convert-datetime-format-into-seconds
-                parsedDateSubjectInSeconds = int(mktime(parsedDateSubject))
-                nowSubject = int(mktime(datetime.now().timetuple()))
+                # Get start datetime of event
+                startTime = getStartTime(createdEvent)
+
+                # Convert parsed start datetime and current datetime to number of seconds since epoch
+                startTimeSeconds = int(mktime(startTime.timetuple()))
+                now = int(mktime(datetime.now().timetuple()))
 
                 # If time parsed from email subject is different from current time
-                # (i.e. more than 60 seconds away from current time), add event to calendar
-                if int(abs(parsedDateSubjectInSeconds - nowSubject)) > 60:
+                # (i.e. more than 60 seconds away from current time), keep event in calendar
+                # Else delete event and parse email body for datetime
+                if int(abs(startTimeSeconds - now)) <= 60:
 
-                    # Create new event in calendar and store the parsed time
-                    created_event = cal.events().quickAdd(calendarId='primary', text=parsedDatetimeSubject).execute()
-                    
-                    # Set name of newly created event to email subject and update event in calendar
-                    created_event['summary'] = subject
-                    cal.events().update(calendarId='primary', eventId=created_event['id'], body=created_event).execute()
+                    cal.events().delete(calendarId='primary', eventId=createdEvent['id']).execute()
 
-                # If time parsed from email subject is within 60 seconds of current time, parse email body for a 
-                # different, more accurete event time (if any)
-                else:
-                    # Search email body for datetime and convert from a time struct to a datetime object
+                   # Use parsedatetime library to search email body for datetime and convert from a time struct to a datetime object
                     parsedDateBody = pdtCal.parse(msg_body)[0]
                     parsedDatetimeBody = datetime.fromtimestamp(mktime(parsedDateBody))
 
@@ -113,9 +107,19 @@ def parseGmail():
                         cal.events().update(calendarId='primary', eventId=created_event['id'], body=created_event).execute()
 
 
+# Get start time of Google calendar event as a datetime object
+# Inspired by https://stackoverflow.com/questions/18269888/convert-datetime-format-into-seconds
+def getStartTime(event):
+    try:
+        startTime = datetime.strptime(event['start']['dateTime'][:19], "%Y-%m-%dT%H:%M:%S")
+    except KeyError:
+        startTime = datetime.strptime(event['start']['date'], "%Y-%m-%d")
+    return startTime
+
+
 # From Google API documentation
 def credentials_to_dict(credentials):
-  return {'token': credentials.token,
+    return {'token': credentials.token,
           'refresh_token': credentials.refresh_token,
           'token_uri': credentials.token_uri,
           'client_id': credentials.client_id,
